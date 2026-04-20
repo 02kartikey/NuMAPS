@@ -1,0 +1,12 @@
+{
+  "name": "numind-maps",
+  "version": "1.0.0",
+  "description": "NuMind MAPS — Multi-dimensional Assessments for Personalized Success",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
