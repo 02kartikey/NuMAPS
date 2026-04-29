@@ -154,7 +154,7 @@ function _saveSession(activePage) {
     const snap = {
       student:   S.student,
       sessionId: S.sessionId,
-      cpi:  { answers: S.cpi.answers,  scores: S.cpi.scores,  duration: S.cpi.duration  },
+      cpi:  { answers: S.cpi.answers,  scores: S.cpi.scores,  duration: S.cpi.duration, currentQ: cpiCurQ },
       sea:  { answers: S.sea.answers,  scores: S.sea.scores,  duration: S.sea.duration,  currentPage: S.sea.currentPage },
       nmap: { answers: S.nmap.answers, scores: S.nmap.scores, duration: S.nmap.duration, currentDim: S.nmap.currentDim },
       daab: {
@@ -204,6 +204,7 @@ function _restoreSession() {
       if (Array.isArray(snap.cpi.answers)) S.cpi.answers = snap.cpi.answers;
       S.cpi.scores   = snap.cpi.scores   || null;
       S.cpi.duration = snap.cpi.duration || 0;
+      if (snap.cpi.currentQ != null) cpiCurQ = snap.cpi.currentQ;
     }
 
     // Restore SEA.
@@ -407,8 +408,13 @@ const CPI_QS = [
 let cpiCurQ = 0;
 
 function startCPI() {
-  S.cpi.answers = Array.from({length:20}, ()=>[]);
-  S.cpi.startTime = Date.now(); cpiCurQ = 0;
+  // If answers already exist (session restore), resume — don't wipe progress.
+  const resumingCpi = S.cpi.answers.some(a => Array.isArray(a) ? a.length > 0 : a !== null);
+  if (!resumingCpi) {
+    S.cpi.answers = Array.from({length:20}, ()=>[]);
+    cpiCurQ = 0;
+  }
+  S.cpi.startTime = Date.now();
   startTimer('cpi-timer', S.cpi);
   goPage('cpi'); renderCPIQ();
 }
@@ -478,8 +484,9 @@ function cpiSel(i) {
     arr.push(i);        // select (max 3)
   }
   renderCPIQ();
+  _saveSession('cpi');
 }
-function cpiNav(d)  { cpiCurQ=Math.max(0,Math.min(19,cpiCurQ+d)); renderCPIQ(); window.scrollTo(0,56); }
+function cpiNav(d)  { cpiCurQ=Math.max(0,Math.min(19,cpiCurQ+d)); renderCPIQ(); window.scrollTo(0,56); _saveSession('cpi'); }
 function cpiJump(i) { cpiCurQ=i; renderCPIQ(); }
 
 function renderCPIMap() {
@@ -545,8 +552,13 @@ const SEA_ENCOURAGE = [
 ];
 
 function startNSEAAS() {
-  S.sea.answers = new Array(60).fill(null);
-  S.sea.startTime = Date.now(); S.sea.currentPage = 0;
+  // If answers already exist (session restore), resume — don't wipe progress.
+  const resumingSea = S.sea.answers.some(a => a !== null);
+  if (!resumingSea) {
+    S.sea.answers = new Array(60).fill(null);
+    S.sea.currentPage = 0;
+  }
+  S.sea.startTime = Date.now();
   startTimer('sea-timer', S.sea);
   goPage('nseaas'); renderSEAPage(); renderSEASidebarNav();
 }
@@ -631,6 +643,7 @@ function seaAns(qi, val) {
   const activeDot = document.querySelector('.page-dot.active .page-dot-fill');
   if (activeDot) activeDot.style.width = (pageDone/10*100)+'%';
   if (pageDone===10) { const w=document.getElementById('pg-warn'); if(w) w.style.display='none'; }
+  _saveSession('nseaas');
   renderSEASidebarNav();
 }
 
@@ -1183,8 +1196,13 @@ const NMAP_ENCOURAGE = [
 ];
 
 function startNMAP() {
-  S.nmap.answers = new Array(63).fill(null);
-  S.nmap.startTime = Date.now(); S.nmap.currentDim = 0;
+  // If answers already exist (session restore), resume — don't wipe progress.
+  const resumingNmap = S.nmap.answers.some(a => a !== null);
+  if (!resumingNmap) {
+    S.nmap.answers = new Array(63).fill(null);
+    S.nmap.currentDim = 0;
+  }
+  S.nmap.startTime = Date.now();
   startTimer('nmap-timer', S.nmap);
   goPage('nmap'); renderNMAPPage(); renderNMAPSidebarNav();
 }
@@ -1276,6 +1294,7 @@ function nmapAns(k, val) {
   document.getElementById('nmap-pbar').style.width = pct + '%';
   if (pageDone === 7) { const w = document.getElementById('nmap-warn'); if (w) w.style.display = 'none'; }
   renderNMAPSidebarNav();
+  _saveSession('nmap');
 }
 
 function tryNmapNextPage() {
@@ -1291,7 +1310,7 @@ function tryNmapNextPage() {
 
 function nmapPageNav(d) {
   const next = S.nmap.currentDim + d;
-  if (next >= 0 && next <= 8) { S.nmap.currentDim = next; renderNMAPPage(); window.scrollTo(0, 56); }
+  if (next >= 0 && next <= 8) { S.nmap.currentDim = next; renderNMAPPage(); window.scrollTo(0, 56); _saveSession('nmap'); }
 }
 
 function renderNMAPSidebarNav() {
@@ -1603,18 +1622,22 @@ function updateDaabTimerDisplay() {
 
 /* ── DAAB Entry Point ── */
 function startDAAB() {
-  S.daab.currentSub = 0;
-  ['va','pa','na','lsa','hma','ar','ma','sa'].forEach(k => {
-    S.daab[k].answers = new Array(DAAB_KEYS[k].length).fill(null);
-    S.daab[k].scores = null; S.daab[k].startTime = null; S.daab[k].duration = 0;
-  });
-  S.daab.pa.currentPage = 0;
-  S.daab.va.currentPage = 0;
-  S.daab.na.currentPage = 0;
-  S.daab.lsa.currentPage = 0;
-  S.daab.hma.currentPage = 0;
-  S.daab.ar.currentPage = 0;
-  S.daab.ma.currentPage = 0;
+  // If answers already exist (session restore), resume — don't wipe progress.
+  const resumingDaab = ['va','pa','na','lsa','hma','ar','ma','sa'].some(k => S.daab[k].answers.some(a => a !== null));
+  if (!resumingDaab) {
+    S.daab.currentSub = 0;
+    ['va','pa','na','lsa','hma','ar','ma','sa'].forEach(k => {
+      S.daab[k].answers = new Array(DAAB_KEYS[k].length).fill(null);
+      S.daab[k].scores = null; S.daab[k].startTime = null; S.daab[k].duration = 0;
+    });
+    S.daab.pa.currentPage = 0;
+    S.daab.va.currentPage = 0;
+    S.daab.na.currentPage = 0;
+    S.daab.lsa.currentPage = 0;
+    S.daab.hma.currentPage = 0;
+    S.daab.ar.currentPage = 0;
+    S.daab.ma.currentPage = 0;
+  }
   // Make page visible first so getElementById works, then render
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-daab').classList.add('active');
@@ -1633,7 +1656,7 @@ function startDAAB() {
     if (c) c.classList.toggle('done', i < a);
   }
   renderDAABSideNav();
-  renderDAABSub(0);
+  renderDAABSub(S.daab.currentSub || 0);
   _saveSession('daab');
 }
 
@@ -1759,6 +1782,8 @@ function updateDaabProgress(mod) {
   if (pctEl) pctEl.textContent = pct + '%';
   // update sidebar overall bar
   _updateDaabSidebarOverall();
+  // Persist answers after every DAAB selection
+  _saveSession('daab');
 }
 
 function _updateDaabSidebarOverall() {
