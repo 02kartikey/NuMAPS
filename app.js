@@ -118,14 +118,14 @@ const S = {
   sea:  { answers: new Array(60).fill(null), scores: null, startTime: null, duration: 0, currentPage: 0 },
   nmap: { answers: new Array(63).fill(null), scores: null, startTime: null, duration: 0, currentDim: 0 },
   daab: {
-    va:  { answers: new Array(20).fill(null), scores: null, startTime: null, duration: 0 },
-    pa:  { answers: new Array(50).fill(null), scores: null, startTime: null, duration: 0, currentPage: 0 },
-    na:  { answers: new Array(20).fill(null), scores: null, startTime: null, duration: 0 },
-    lsa: { answers: new Array(20).fill(null), scores: null, startTime: null, duration: 0 },
-    hma: { answers: new Array(20).fill(null), scores: null, startTime: null, duration: 0 },
-    ar:  { answers: new Array(20).fill(null), scores: null, startTime: null, duration: 0 },
-    ma:  { answers: new Array(20).fill(null), scores: null, startTime: null, duration: 0 },
-    sa:  { answers: new Array(20).fill(null), scores: null, startTime: null, duration: 0 },
+    va:  { answers: new Array(20).fill(null), scores: null, startTime: null, duration: 0, timerStartedAt: null },
+    pa:  { answers: new Array(50).fill(null), scores: null, startTime: null, duration: 0, currentPage: 0, timerStartedAt: null },
+    na:  { answers: new Array(20).fill(null), scores: null, startTime: null, duration: 0, timerStartedAt: null },
+    lsa: { answers: new Array(20).fill(null), scores: null, startTime: null, duration: 0, timerStartedAt: null },
+    hma: { answers: new Array(20).fill(null), scores: null, startTime: null, duration: 0, timerStartedAt: null },
+    ar:  { answers: new Array(20).fill(null), scores: null, startTime: null, duration: 0, timerStartedAt: null },
+    ma:  { answers: new Array(20).fill(null), scores: null, startTime: null, duration: 0, timerStartedAt: null },
+    sa:  { answers: new Array(20).fill(null), scores: null, startTime: null, duration: 0, timerStartedAt: null },
     currentSub: 0,
   },
   timerInt: null,
@@ -158,14 +158,14 @@ function _saveSession(activePage) {
       sea:  { answers: S.sea.answers,  scores: S.sea.scores,  duration: S.sea.duration,  currentPage: S.sea.currentPage },
       nmap: { answers: S.nmap.answers, scores: S.nmap.scores, duration: S.nmap.duration, currentDim: S.nmap.currentDim },
       daab: {
-        va:  { answers: S.daab.va.answers,  scores: S.daab.va.scores,  duration: S.daab.va.duration,  currentPage: S.daab.va.currentPage  || 0 },
-        pa:  { answers: S.daab.pa.answers,  scores: S.daab.pa.scores,  duration: S.daab.pa.duration,  currentPage: S.daab.pa.currentPage  || 0 },
-        na:  { answers: S.daab.na.answers,  scores: S.daab.na.scores,  duration: S.daab.na.duration,  currentPage: S.daab.na.currentPage  || 0 },
-        lsa: { answers: S.daab.lsa.answers, scores: S.daab.lsa.scores, duration: S.daab.lsa.duration, currentPage: S.daab.lsa.currentPage || 0 },
-        hma: { answers: S.daab.hma.answers, scores: S.daab.hma.scores, duration: S.daab.hma.duration, currentPage: S.daab.hma.currentPage || 0 },
-        ar:  { answers: S.daab.ar.answers,  scores: S.daab.ar.scores,  duration: S.daab.ar.duration,  currentPage: S.daab.ar.currentPage  || 0 },
-        ma:  { answers: S.daab.ma.answers,  scores: S.daab.ma.scores,  duration: S.daab.ma.duration,  currentPage: S.daab.ma.currentPage  || 0 },
-        sa:  { answers: S.daab.sa.answers,  scores: S.daab.sa.scores,  duration: S.daab.sa.duration,  currentPage: S.daab.sa.currentPage  || 0 },
+        va:  { answers: S.daab.va.answers,  scores: S.daab.va.scores,  duration: S.daab.va.duration,  currentPage: S.daab.va.currentPage  || 0, timerStartedAt: S.daab.va.timerStartedAt  || null },
+        pa:  { answers: S.daab.pa.answers,  scores: S.daab.pa.scores,  duration: S.daab.pa.duration,  currentPage: S.daab.pa.currentPage  || 0, timerStartedAt: S.daab.pa.timerStartedAt  || null },
+        na:  { answers: S.daab.na.answers,  scores: S.daab.na.scores,  duration: S.daab.na.duration,  currentPage: S.daab.na.currentPage  || 0, timerStartedAt: S.daab.na.timerStartedAt  || null },
+        lsa: { answers: S.daab.lsa.answers, scores: S.daab.lsa.scores, duration: S.daab.lsa.duration, currentPage: S.daab.lsa.currentPage || 0, timerStartedAt: S.daab.lsa.timerStartedAt || null },
+        hma: { answers: S.daab.hma.answers, scores: S.daab.hma.scores, duration: S.daab.hma.duration, currentPage: S.daab.hma.currentPage || 0, timerStartedAt: S.daab.hma.timerStartedAt || null },
+        ar:  { answers: S.daab.ar.answers,  scores: S.daab.ar.scores,  duration: S.daab.ar.duration,  currentPage: S.daab.ar.currentPage  || 0, timerStartedAt: S.daab.ar.timerStartedAt  || null },
+        ma:  { answers: S.daab.ma.answers,  scores: S.daab.ma.scores,  duration: S.daab.ma.duration,  currentPage: S.daab.ma.currentPage  || 0, timerStartedAt: S.daab.ma.timerStartedAt  || null },
+        sa:  { answers: S.daab.sa.answers,  scores: S.daab.sa.scores,  duration: S.daab.sa.duration,  currentPage: S.daab.sa.currentPage  || 0, timerStartedAt: S.daab.sa.timerStartedAt  || null },
         currentSub: S.daab.currentSub,
       },
       activePage: activePage || null,
@@ -233,6 +233,9 @@ function _restoreSession() {
         if (snap.daab[k].currentPage != null) {
           S.daab[k].currentPage = snap.daab[k].currentPage;
         }
+        if (snap.daab[k].timerStartedAt != null) {
+          S.daab[k].timerStartedAt = snap.daab[k].timerStartedAt;
+        }
       });
       S.daab.currentSub = snap.daab.currentSub || 0;
     }
@@ -247,9 +250,8 @@ function _restoreSession() {
 }
 
 /* ── Wrap goPage so it auto-saves on every navigation ── */
-const _goPageOrig = goPage;
 function goPage(id) {
-  _goPageOrig(id);
+  _goPageReal(id);
   // Persist after every page change so a refresh always lands back here.
   _saveSession(id);
   // Clear session once the student has fully finished (results page).
@@ -270,11 +272,11 @@ document.addEventListener('DOMContentLoaded', function _initSession() {
   }
 
   // Non-assessment pages (transitions, ready, results) — restore directly.
-  _goPageOrig(savedPage);
+  _goPageReal(savedPage);
   if (savedPage === 'ready' || savedPage === 'results') {
     if (S.cpi.scores && S.sea.scores && S.nmap.scores) {
       typeof buildResults === 'function' && buildResults();
-      _goPageOrig('results');
+      _goPageReal('results');
     }
   }
 });
@@ -282,7 +284,7 @@ document.addEventListener('DOMContentLoaded', function _initSession() {
 /** Show a full-screen overlay letting the student resume or restart their session. */
 function _showResumeOverlay(savedPage) {
   // Build a minimal overlay over the landing page
-  _goPageOrig('landing');
+  _goPageReal('landing');
 
   const overlay = document.createElement('div');
   overlay.id = 'resume-overlay';
@@ -320,16 +322,17 @@ function _showResumeOverlay(savedPage) {
   document.getElementById('btn-restart').addEventListener('click', function() {
     overlay.remove();
     _clearSession();
-    _goPageOrig('landing');
+    _goPageReal('landing');
   });
 }
 
 /** Actually restore the UI to the saved mid-assessment page. */
 function _doResume(savedPage) {
   if (savedPage === 'nmap') {
-    _goPageOrig('nmap');
+    goPage('nmap');
     typeof renderNMAPPage === 'function' && renderNMAPPage();
     typeof renderNMAPSidebarNav === 'function' && renderNMAPSidebarNav();
+    if (S.nmap.startTime) startTimer('nmap-timer', S.nmap);
   } else if (savedPage === 'daab') {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     const daabPg = document.getElementById('page-daab');
@@ -351,12 +354,14 @@ function _doResume(savedPage) {
     // skipTimer=true: don't reset the countdown, don't auto-advance
     typeof renderDAABSub === 'function' && renderDAABSub(S.daab.currentSub || 0, true);
   } else if (savedPage === 'cpi') {
-    _goPageOrig('cpi');
+    goPage('cpi');
     typeof renderCPIQ === 'function' && renderCPIQ();
+    if (S.cpi.startTime) startTimer('cpi-timer', S.cpi);
   } else if (savedPage === 'nseaas') {
-    _goPageOrig('nseaas');
+    goPage('nseaas');
     typeof renderSEAPage === 'function' && renderSEAPage();
     typeof renderSEASidebarNav === 'function' && renderSEASidebarNav();
+    if (S.sea.startTime) startTimer('sea-timer', S.sea);
   }
 }
 
@@ -1686,7 +1691,7 @@ function startDAAB() {
     S.daab.currentSub = 0;
     ['va','pa','na','lsa','hma','ar','ma','sa'].forEach(k => {
       S.daab[k].answers = new Array(DAAB_KEYS[k].length).fill(null);
-      S.daab[k].scores = null; S.daab[k].startTime = null; S.daab[k].duration = 0;
+      S.daab[k].scores = null; S.daab[k].startTime = null; S.daab[k].duration = 0; S.daab[k].timerStartedAt = null;
     });
     S.daab.pa.currentPage = 0;
     S.daab.va.currentPage = 0;
@@ -1714,7 +1719,7 @@ function startDAAB() {
     if (c) c.classList.toggle('done', i < a);
   }
   renderDAABSideNav();
-  renderDAABSub(S.daab.currentSub || 0);
+  renderDAABSub(S.daab.currentSub || 0, resumingDaab); // skipTimer when resuming
   _saveSession('daab');
 }
 
@@ -1741,7 +1746,10 @@ function renderDAABSub(idx, skipTimer) {
   renderDAABMobileNav();
   const sub = DAAB_SUBS[idx];
   const mod = S.daab[sub.key];
-  if (!skipTimer) mod.startTime = Date.now();
+  if (!skipTimer) {
+    mod.startTime = Date.now();
+    mod.timerStartedAt = Date.now(); // wall-clock anchor for refresh-resume
+  }
 
   const area = document.getElementById('daab-subtest-area');
   if (!area) return;
@@ -1755,7 +1763,23 @@ function renderDAABSub(idx, skipTimer) {
   else if (sub.key === 'ma')  renderMA(area, sub, mod);
   else if (sub.key === 'sa')  renderSA(area, sub, mod);
 
-  if (!skipTimer) startDaabTimer(sub.time, () => advanceDAABSub(sub.key));
+  if (!skipTimer) {
+    startDaabTimer(sub.time, () => advanceDAABSub(sub.key));
+  } else {
+    // Restore path: compute how much time is left based on wall-clock anchor.
+    // If timerStartedAt was saved, resume from remaining seconds.
+    // If it has already expired, auto-advance immediately (timer ran out while tab was closed).
+    const elapsed  = mod.timerStartedAt ? Math.floor((Date.now() - mod.timerStartedAt) / 1000) : 0;
+    const remaining = Math.max(sub.time - elapsed, 0);
+    if (remaining <= 0) {
+      // Time expired while the tab was closed — treat as timeout.
+      console.log(`[DAAB] Timer expired during refresh for ${sub.key} — auto-advancing.`);
+      setTimeout(() => advanceDAABSub(sub.key), 500);
+    } else {
+      // Restart timer from remaining seconds only (no reset to full time).
+      startDaabTimer(remaining, () => advanceDAABSub(sub.key));
+    }
+  }
 }
 
 function renderDAABMobileNav() {
