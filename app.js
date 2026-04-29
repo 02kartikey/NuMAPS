@@ -158,14 +158,14 @@ function _saveSession(activePage) {
       sea:  { answers: S.sea.answers,  scores: S.sea.scores,  duration: S.sea.duration,  currentPage: S.sea.currentPage },
       nmap: { answers: S.nmap.answers, scores: S.nmap.scores, duration: S.nmap.duration, currentDim: S.nmap.currentDim },
       daab: {
-        va:  { answers: S.daab.va.answers,  scores: S.daab.va.scores,  duration: S.daab.va.duration  },
-        pa:  { answers: S.daab.pa.answers,  scores: S.daab.pa.scores,  duration: S.daab.pa.duration,  currentPage: S.daab.pa.currentPage },
-        na:  { answers: S.daab.na.answers,  scores: S.daab.na.scores,  duration: S.daab.na.duration  },
-        lsa: { answers: S.daab.lsa.answers, scores: S.daab.lsa.scores, duration: S.daab.lsa.duration },
-        hma: { answers: S.daab.hma.answers, scores: S.daab.hma.scores, duration: S.daab.hma.duration },
-        ar:  { answers: S.daab.ar.answers,  scores: S.daab.ar.scores,  duration: S.daab.ar.duration  },
-        ma:  { answers: S.daab.ma.answers,  scores: S.daab.ma.scores,  duration: S.daab.ma.duration  },
-        sa:  { answers: S.daab.sa.answers,  scores: S.daab.sa.scores,  duration: S.daab.sa.duration  },
+        va:  { answers: S.daab.va.answers,  scores: S.daab.va.scores,  duration: S.daab.va.duration,  currentPage: S.daab.va.currentPage  || 0 },
+        pa:  { answers: S.daab.pa.answers,  scores: S.daab.pa.scores,  duration: S.daab.pa.duration,  currentPage: S.daab.pa.currentPage  || 0 },
+        na:  { answers: S.daab.na.answers,  scores: S.daab.na.scores,  duration: S.daab.na.duration,  currentPage: S.daab.na.currentPage  || 0 },
+        lsa: { answers: S.daab.lsa.answers, scores: S.daab.lsa.scores, duration: S.daab.lsa.duration, currentPage: S.daab.lsa.currentPage || 0 },
+        hma: { answers: S.daab.hma.answers, scores: S.daab.hma.scores, duration: S.daab.hma.duration, currentPage: S.daab.hma.currentPage || 0 },
+        ar:  { answers: S.daab.ar.answers,  scores: S.daab.ar.scores,  duration: S.daab.ar.duration,  currentPage: S.daab.ar.currentPage  || 0 },
+        ma:  { answers: S.daab.ma.answers,  scores: S.daab.ma.scores,  duration: S.daab.ma.duration,  currentPage: S.daab.ma.currentPage  || 0 },
+        sa:  { answers: S.daab.sa.answers,  scores: S.daab.sa.scores,  duration: S.daab.sa.duration,  currentPage: S.daab.sa.currentPage  || 0 },
         currentSub: S.daab.currentSub,
       },
       activePage: activePage || null,
@@ -230,7 +230,7 @@ function _restoreSession() {
         if (Array.isArray(snap.daab[k].answers)) S.daab[k].answers = snap.daab[k].answers;
         S.daab[k].scores   = snap.daab[k].scores   || null;
         S.daab[k].duration = snap.daab[k].duration || 0;
-        if (k === 'pa' && snap.daab[k].currentPage != null) {
+        if (snap.daab[k].currentPage != null) {
           S.daab[k].currentPage = snap.daab[k].currentPage;
         }
       });
@@ -261,23 +261,81 @@ document.addEventListener('DOMContentLoaded', function _initSession() {
   const savedPage = _restoreSession();
   if (!savedPage || savedPage === 'landing' || savedPage === 'register') return;
 
-  // Sufficient data exists — jump straight back to where they were.
-  // For pages that need an active render call, trigger it after the page switch.
-  _goPageOrig(savedPage);   // navigate without re-saving (avoids loop)
+  // For any mid-assessment page, show a resume/restart choice instead of
+  // jumping blindly back in (avoids stale-state confusion after completion).
+  const midPages = ['nmap','daab','cpi','nseaas'];
+  if (midPages.includes(savedPage)) {
+    _showResumeOverlay(savedPage);
+    return;
+  }
 
-  // Re-render module-specific UI if mid-assessment.
+  // Non-assessment pages (transitions, ready, results) — restore directly.
+  _goPageOrig(savedPage);
+  if (savedPage === 'ready' || savedPage === 'results') {
+    if (S.cpi.scores && S.sea.scores && S.nmap.scores) {
+      typeof buildResults === 'function' && buildResults();
+      _goPageOrig('results');
+    }
+  }
+});
+
+/** Show a full-screen overlay letting the student resume or restart their session. */
+function _showResumeOverlay(savedPage) {
+  // Build a minimal overlay over the landing page
+  _goPageOrig('landing');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'resume-overlay';
+  overlay.style.cssText = [
+    'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center',
+    'background:rgba(15,23,42,0.72);backdrop-filter:blur(6px)',
+  ].join(';');
+
+  const moduleLabel = { nmap:'Module 1 — Personality', daab:'Module 2 — Aptitude', cpi:'Module 3 — Career Interests', nseaas:'Module 4 — Social-Emotional' }[savedPage] || 'Assessment';
+  const subLabel = savedPage === 'daab' && S.daab.currentSub != null
+    ? ` · Sub-test ${S.daab.currentSub + 1} of ${(typeof DAAB_SUBS !== 'undefined' ? DAAB_SUBS.length : 8)}`
+    : '';
+
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:20px;padding:2.5rem 2rem;max-width:420px;width:90%;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,0.25)">
+      <div style="font-size:48px;margin-bottom:1rem">🔖</div>
+      <h2 style="font-family:'Nunito',sans-serif;font-size:22px;font-weight:800;margin-bottom:.5rem;color:#1e293b">Session saved</h2>
+      <p style="font-size:14px;color:#64748b;margin-bottom:.25rem">You were in the middle of:</p>
+      <p style="font-size:15px;font-weight:700;color:#7c3aed;margin-bottom:1.75rem">${moduleLabel}${subLabel}</p>
+      <button id="btn-resume" style="width:100%;padding:.85rem;border-radius:12px;border:none;background:#7c3aed;color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:.75rem">
+        ▶ Resume where I left off
+      </button>
+      <button id="btn-restart" style="width:100%;padding:.85rem;border-radius:12px;border:2px solid #e2e8f0;background:#fff;color:#64748b;font-size:14px;font-weight:600;cursor:pointer">
+        ↺ Start over (clear saved progress)
+      </button>
+    </div>`;
+
+  document.body.appendChild(overlay);
+
+  document.getElementById('btn-resume').addEventListener('click', function() {
+    overlay.remove();
+    _doResume(savedPage);
+  });
+
+  document.getElementById('btn-restart').addEventListener('click', function() {
+    overlay.remove();
+    _clearSession();
+    _goPageOrig('landing');
+  });
+}
+
+/** Actually restore the UI to the saved mid-assessment page. */
+function _doResume(savedPage) {
   if (savedPage === 'nmap') {
+    _goPageOrig('nmap');
     typeof renderNMAPPage === 'function' && renderNMAPPage();
     typeof renderNMAPSidebarNav === 'function' && renderNMAPSidebarNav();
-  }
-  if (savedPage === 'daab') {
-    // DAAB bypasses goPage — activate the page and re-render at saved sub-test.
-    // Do NOT call startDAAB() as it resets all answers.
+  } else if (savedPage === 'daab') {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     const daabPg = document.getElementById('page-daab');
     if (daabPg) daabPg.classList.add('active');
     window.scrollTo(0, 0);
-    const pipA = 2; // PIP_IDX.daab = 2
+    const pipA = 2;
     for (let i = 0; i < 6; i++) {
       const p = document.getElementById('pip' + i);
       if (!p) continue;
@@ -290,17 +348,17 @@ document.addEventListener('DOMContentLoaded', function _initSession() {
       if (c) c.classList.toggle('done', i < pipA);
     }
     typeof renderDAABSideNav === 'function' && renderDAABSideNav();
-    typeof renderDAABSub === 'function' && renderDAABSub(S.daab.currentSub || 0);
+    // skipTimer=true: don't reset the countdown, don't auto-advance
+    typeof renderDAABSub === 'function' && renderDAABSub(S.daab.currentSub || 0, true);
+  } else if (savedPage === 'cpi') {
+    _goPageOrig('cpi');
+    typeof renderCPIQ === 'function' && renderCPIQ();
+  } else if (savedPage === 'nseaas') {
+    _goPageOrig('nseaas');
+    typeof renderSEAPage === 'function' && renderSEAPage();
+    typeof renderSEASidebarNav === 'function' && renderSEASidebarNav();
   }
-  if (savedPage === 'cpi')    { typeof renderCPIQ === 'function' && renderCPIQ(); }
-  if (savedPage === 'nseaas') { typeof renderSEAPage === 'function' && renderSEAPage(); }
-  if (savedPage === 'ready' || savedPage === 'results') {
-    if (S.cpi.scores && S.sea.scores && S.nmap.scores) {
-      typeof buildResults === 'function' && buildResults();
-      _goPageOrig('results');
-    }
-  }
-});
+}
 
 /* ── ROUTER ── */
 const PIP_IDX = { landing:0, register:0, nmap:1, transition:1, daab:2, transition2:2, cpi:3, transition3:3, nseaas:4, ready:5, results:5 };
@@ -1677,13 +1735,13 @@ function renderDAABSideNav() {
   _updateDaabSidebarOverall();
 }
 
-function renderDAABSub(idx) {
+function renderDAABSub(idx, skipTimer) {
   S.daab.currentSub = idx;
   renderDAABSideNav();
   renderDAABMobileNav();
   const sub = DAAB_SUBS[idx];
   const mod = S.daab[sub.key];
-  mod.startTime = Date.now();
+  if (!skipTimer) mod.startTime = Date.now();
 
   const area = document.getElementById('daab-subtest-area');
   if (!area) return;
@@ -1697,7 +1755,7 @@ function renderDAABSub(idx) {
   else if (sub.key === 'ma')  renderMA(area, sub, mod);
   else if (sub.key === 'sa')  renderSA(area, sub, mod);
 
-  startDaabTimer(sub.time, () => advanceDAABSub(sub.key));
+  if (!skipTimer) startDaabTimer(sub.time, () => advanceDAABSub(sub.key));
 }
 
 function renderDAABMobileNav() {
@@ -3581,7 +3639,7 @@ function restoreUI() {
           if (c) c.classList.toggle('done', i < a);
         }
         renderDAABSideNav();
-        renderDAABSub(daab.currentSub);
+        renderDAABSub(daab.currentSub, true); // skipTimer=true on restore
       } else {
         goPage('transition2');
       }
@@ -3684,8 +3742,8 @@ nmapPageNav = function(d) {
 // We intercept by wrapping the global sel functions once DAAB page loads.
 // We do this by patching renderDAABSub to install wrappers post-render.
 const _renderDAABSub = renderDAABSub;
-renderDAABSub = function(idx) {
-  _renderDAABSub(idx);
+renderDAABSub = function(idx, skipTimer) {
+  _renderDAABSub(idx, skipTimer);
   saveState();
   // Wrap all DAAB sel functions that may have just been (re)assigned
   const daabSelNames = ['daabVASel','daabPASel','daabNASel','daabMCQSel',

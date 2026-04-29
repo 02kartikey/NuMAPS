@@ -287,16 +287,16 @@ const MAX_QUEUE_SIZE = parseInt(process.env.MAX_QUEUE_SIZE || '50', 10);
 // rather than firing a wasted OpenAI API slot.
 const requestQueue = [];
 
-// Try to drain the next queued request if a slot is free.
-// Skips entries that were cancelled due to client disconnect.
+// Try to drain queued requests into any free concurrency slots.
+// Skips entries cancelled due to client disconnect.
+// Slots are claimed here (activeRequests++) BEFORE next.run() so concurrent
+// drain calls never overshoot MAX_CONCURRENT.
 function drainQueue() {
   while (requestQueue.length > 0 && activeRequests < MAX_CONCURRENT) {
     const next = requestQueue.shift();
-    if (!next.cancelled) {
-      next.run();
-      return; // one slot consumed — stop here
-    }
-    // Entry was cancelled (client disconnected) — skip silently and loop
+    if (next.cancelled) continue; // client gone — skip, loop fills next free slot
+    activeRequests++;              // claim slot atomically before dispatching
+    next.run();                    // run() must NOT increment activeRequests again
   }
 }
 
@@ -329,9 +329,14 @@ function serveStatic(filePath, res) {
 //  FIX 1: Defined at module scope, not inside the HTTP
 //  handler — so it is not re-created on every request.
 // ════════════════════════════════════════════════════
-function runProxyRequest(payload, req, res) {
+function runProxyRequest(payload, req, res, slotAlreadyClaimed) {
   // Guard: client may have closed while waiting in queue.
-  if (res.writableEnded || !req.socket?.readable) { drainQueue(); return; }
+  // If drainQueue pre-claimed a slot for this entry, release it before bailing.
+  if (res.writableEnded || !req.socket?.readable) {
+    if (slotAlreadyClaimed) activeRequests--;
+    drainQueue();
+    return;
+  }
 
   // ── Cache check ──────────────────────────────────────────────────────
   // Non-streaming requests whose score payload matches a cached entry are
@@ -357,7 +362,9 @@ function runProxyRequest(payload, req, res) {
         'X-Cache':       'HIT',
       });
       res.end(cached);
-      // No activeRequests slot consumed — drainQueue immediately.
+      // Cache hit: no real OpenAI slot used.
+      // Release any pre-claimed slot (drainQueue path) then try to fill it.
+      if (slotAlreadyClaimed) activeRequests--;
       drainQueue();
       return;
     }
@@ -365,7 +372,8 @@ function runProxyRequest(payload, req, res) {
   }
   // ────────────────────────────────────────────────────────────────────
 
-  activeRequests++;
+  // Claim the concurrency slot — only if drainQueue has not already done so.
+  if (!slotAlreadyClaimed) activeRequests++;
   const releaseSlot = (() => {
     let released = false;
     return () => { if (!released) { released = true; activeRequests--; drainQueue(); } };
@@ -541,14 +549,15 @@ const server = http.createServer((req, res) => {
 
       // Slot available → run immediately; otherwise queue or hard-reject.
       if (activeRequests < MAX_CONCURRENT) {
-        runProxyRequest(payload, req, res);
+        activeRequests++;                          // claim slot before runProxyRequest
+        runProxyRequest(payload, req, res, true); // slotAlreadyClaimed=true
       } else if (requestQueue.length < MAX_QUEUE_SIZE) {
         // FIX 2: Wire up client-disconnect to mark the entry cancelled so
         // drainQueue skips it and frees the slot for another request.
         // FIX 3: X-Queue-Position header removed — it can't be kept accurate
         // as the queue drains and a stale position is misleading to clients.
         const entry = { cancelled: false, run: null };
-        entry.run = () => runProxyRequest(payload, req, res);
+        entry.run = () => runProxyRequest(payload, req, res, true); // slot pre-claimed by drainQueue
 
         req.on('close', () => {
           if (entry.cancelled) return;
@@ -560,8 +569,17 @@ const server = http.createServer((req, res) => {
         console.log(`[Queue] ${requestQueue.length} request(s) waiting (worker ${process.pid})`);
       } else {
         // Queue full → only now do we hard-reject.
-        res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': '30' });
-        res.end(JSON.stringify({ error: { message: 'Server overloaded — please try again in a moment.' } }));
+        res.writeHead(429, {
+          'Content-Type': 'application/json',
+          'Retry-After':  '30',
+          'X-Queue-Depth': String(requestQueue.length),
+        });
+        res.end(JSON.stringify({
+          error: { message: 'Server is busy. Queue is full — please wait a moment and try again.' },
+          queueDepth: requestQueue.length,
+          maxQueue:   MAX_QUEUE_SIZE,
+        }));
+        console.warn(`[Queue] FULL (${requestQueue.length}/${MAX_QUEUE_SIZE}) — hard-rejected (worker ${process.pid})`);
       }
     });
     return;
