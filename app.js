@@ -265,7 +265,7 @@ document.addEventListener('DOMContentLoaded', function _initSession() {
 
   // For any mid-assessment page, show a resume/restart choice instead of
   // jumping blindly back in (avoids stale-state confusion after completion).
-  const midPages = ['nmap','daab','cpi','nseaas'];
+  const midPages = ['nmap','daab','cpi','nseaas','transition','transition2','transition3'];
   if (midPages.includes(savedPage)) {
     _showResumeOverlay(savedPage);
     return;
@@ -293,7 +293,15 @@ function _showResumeOverlay(savedPage) {
     'background:rgba(15,23,42,0.72);backdrop-filter:blur(6px)',
   ].join(';');
 
-  const moduleLabel = { nmap:'Module 1 — Personality', daab:'Module 2 — Aptitude', cpi:'Module 3 — Career Interests', nseaas:'Module 4 — Social-Emotional' }[savedPage] || 'Assessment';
+  const moduleLabel = {
+    nmap:'Module 1 — Personality',
+    daab:'Module 2 — Aptitude',
+    cpi:'Module 3 — Career Interests',
+    nseaas:'Module 4 — Social-Emotional',
+    transition:'Between Module 1 & 2',
+    transition2:'Between Module 2 & 3',
+    transition3:'Between Module 3 & 4',
+  }[savedPage] || 'Assessment';
   const subLabel = savedPage === 'daab' && S.daab.currentSub != null
     ? ` · Sub-test ${S.daab.currentSub + 1} of ${(typeof DAAB_SUBS !== 'undefined' ? DAAB_SUBS.length : 8)}`
     : '';
@@ -350,6 +358,10 @@ function _doResume(savedPage) {
     typeof renderSEAPage === 'function' && renderSEAPage();
     typeof renderSEASidebarNav === 'function' && renderSEASidebarNav();
     if (S.sea.startTime) startTimer('sea-timer', S.sea);
+
+  } else if (savedPage === 'transition' || savedPage === 'transition2' || savedPage === 'transition3') {
+    // Restore directly to the transition screen — no timer needed.
+    _goPageReal(savedPage);
   }
 }
 
@@ -1708,8 +1720,10 @@ function startDAAB() {
   }
   renderDAABSideNav();
   renderDAABSub(S.daab.currentSub || 0, resumingDaab); // skipTimer when resuming
+  // Save AFTER renderDAABSub so timerStartedAt is captured in the snapshot.
   _saveSession('daab');
 }
+
 
 function renderDAABSideNav() {
   const nav = document.getElementById('daab-subnav');
@@ -1756,16 +1770,20 @@ function renderDAABSub(idx, skipTimer) {
   } else {
     // Restore path: compute how much time is left based on wall-clock anchor.
     // If timerStartedAt was saved, resume from remaining seconds.
-    // If it has already expired, auto-advance immediately (timer ran out while tab was closed).
-    const elapsed  = mod.timerStartedAt ? Math.floor((Date.now() - mod.timerStartedAt) / 1000) : 0;
+    // If timerStartedAt is missing (e.g. snapshot taken before it was set),
+    //   treat as if just started — give the full sub time (safe fallback).
+    // Only auto-advance if the timer genuinely expired while the tab was closed.
+    const elapsed = (mod.timerStartedAt && isFinite(mod.timerStartedAt))
+      ? Math.floor((Date.now() - mod.timerStartedAt) / 1000)
+      : 0;
     const remaining = Math.max(sub.time - elapsed, 0);
-    if (remaining <= 0) {
+    if (remaining <= 0 && mod.timerStartedAt && isFinite(mod.timerStartedAt)) {
       // Time expired while the tab was closed — treat as timeout.
       console.log(`[DAAB] Timer expired during refresh for ${sub.key} — auto-advancing.`);
       setTimeout(() => advanceDAABSub(sub.key), 500);
     } else {
-      // Restart timer from remaining seconds only (no reset to full time).
-      startDaabTimer(remaining, () => advanceDAABSub(sub.key));
+      // Restart timer from remaining seconds (or full time if anchor was missing).
+      startDaabTimer(remaining > 0 ? remaining : sub.time, () => advanceDAABSub(sub.key));
     }
   }
 }
