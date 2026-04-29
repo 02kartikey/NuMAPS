@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', function _initSession() {
   if (savedPage === 'ready' || savedPage === 'results') {
     if (S.cpi.scores && S.sea.scores && S.nmap.scores) {
       typeof buildResults === 'function' && buildResults();
-      _goPageReal('results');
+      goPage('results');
     }
   }
 });
@@ -326,37 +326,25 @@ function _showResumeOverlay(savedPage) {
   });
 }
 
-/** Actually restore the UI to the saved mid-assessment page. */
 function _doResume(savedPage) {
   if (savedPage === 'nmap') {
     goPage('nmap');
     typeof renderNMAPPage === 'function' && renderNMAPPage();
     typeof renderNMAPSidebarNav === 'function' && renderNMAPSidebarNav();
     if (S.nmap.startTime) startTimer('nmap-timer', S.nmap);
+
   } else if (savedPage === 'daab') {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    const daabPg = document.getElementById('page-daab');
-    if (daabPg) daabPg.classList.add('active');
-    window.scrollTo(0, 0);
-    const pipA = 2;
-    for (let i = 0; i < 6; i++) {
-      const p = document.getElementById('pip' + i);
-      if (!p) continue;
-      p.classList.remove('now','done');
-      if (i < pipA) p.classList.add('done');
-      else if (i === pipA) p.classList.add('now');
-    }
-    for (let i = 0; i < 5; i++) {
-      const c = document.getElementById('con' + i);
-      if (c) c.classList.toggle('done', i < pipA);
-    }
+    goPage('daab');
+
     typeof renderDAABSideNav === 'function' && renderDAABSideNav();
     // skipTimer=true: don't reset the countdown, don't auto-advance
     typeof renderDAABSub === 'function' && renderDAABSub(S.daab.currentSub || 0, true);
+
   } else if (savedPage === 'cpi') {
     goPage('cpi');
     typeof renderCPIQ === 'function' && renderCPIQ();
     if (S.cpi.startTime) startTimer('cpi-timer', S.cpi);
+
   } else if (savedPage === 'nseaas') {
     goPage('nseaas');
     typeof renderSEAPage === 'function' && renderSEAPage();
@@ -365,26 +353,27 @@ function _doResume(savedPage) {
   }
 }
 
-/* ── ROUTER ── */
 const PIP_IDX = { landing:0, register:0, nmap:1, transition:1, daab:2, transition2:2, cpi:3, transition3:3, nseaas:4, ready:5, results:5 };
-function goPage(id) {
+
+function _goPageReal(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
   window.scrollTo(0, 0);
+
   const a = PIP_IDX[id] ?? 0;
   for (let i = 0; i < 6; i++) {
     const p = document.getElementById('pip' + i);
-    p.classList.remove('now','done');
+    if (!p) continue;
+    p.classList.remove('now', 'done');
     if (i < a) p.classList.add('done');
     else if (i === a) p.classList.add('now');
   }
-  // update connectors
+
   for (let i = 0; i < 5; i++) {
     const c = document.getElementById('con' + i);
     if (c) c.classList.toggle('done', i < a);
   }
 }
-
 /* ── REGISTRATION ── */
 /* ── Registration submission guard — prevents double-submit on rapid clicks ── */
 var _registering = false;
@@ -566,7 +555,6 @@ function renderCPIMap() {
 function submitCPI() {
   stopTimer(S.cpi);
   S.cpi.scores = ENGINE.scoreCPI(S.cpi.answers);
-  _saveSession('transition3');
   goPage('transition3');
 }
 
