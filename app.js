@@ -249,7 +249,29 @@ function _restoreSession() {
   }
 }
 
-/* ── Wrap goPage so it auto-saves on every navigation ── */
+/* ── Nav logo click guard ──────────────────────────────────────────────────
+   Prevents accidentally navigating away from a mid-assessment page by
+   showing a browser confirm dialog. Safe pages (landing, register, results)
+   navigate instantly. DAAB pages also stop the active timer on confirm so
+   it doesn't keep counting down in the background.
+──────────────────────────────────────────────────────────────────────────── */
+function navLogoClick() {
+  const assessmentPages = ['nmap', 'daab', 'cpi', 'nseaas'];
+  const currentPage = document.querySelector('.page.active');
+  const currentId   = currentPage ? currentPage.id.replace('page-', '') : '';
+  if (assessmentPages.includes(currentId)) {
+    const ok = window.confirm('⚠️ You\'re in the middle of an assessment. Your progress is saved — you can resume when you come back. Leave anyway?');
+    if (!ok) return;
+    // Stop the DAAB timer so it doesn't drain time while the student is on the landing page.
+    if (currentId === 'daab') {
+      clearInterval(daabTimerInt);
+      daabTimerInt = null;
+    }
+  }
+  goPage('landing');
+}
+
+
 function goPage(id) {
   _goPageReal(id);
   // Persist after every page change so a refresh always lands back here.
@@ -272,11 +294,14 @@ document.addEventListener('DOMContentLoaded', function _initSession() {
   }
 
   // Non-assessment pages (transitions, ready, results) — restore directly.
+  // Use _goPageReal here (not goPage) to avoid triggering _clearSession for 'results'.
+  // The session should only be cleared when the student explicitly finishes (end of journey),
+  // not every time they refresh on the results page.
   _goPageReal(savedPage);
   if (savedPage === 'ready' || savedPage === 'results') {
     if (S.cpi.scores && S.sea.scores && S.nmap.scores) {
       typeof buildResults === 'function' && buildResults();
-      goPage('results');
+      _goPageReal('results'); // go directly without clearing session
     }
   }
 });
@@ -717,12 +742,12 @@ function trySeaNextPage() {
     if (w) { w.style.display='block'; w.scrollIntoView({behavior:'smooth',block:'nearest'}); }
     return;
   }
-  S.sea.currentPage++; renderSEAPage(); window.scrollTo(0,56);
+  S.sea.currentPage++; renderSEAPage(); window.scrollTo(0,56); _saveSession('nseaas');
 }
 
 function seaPageNav(d) {
   const next=S.sea.currentPage+d;
-  if (next>=0&&next<=5) { S.sea.currentPage=next; renderSEAPage(); window.scrollTo(0,56); }
+  if (next>=0&&next<=5) { S.sea.currentPage=next; renderSEAPage(); window.scrollTo(0,56); _saveSession('nseaas'); }
 }
 
 function renderSEASidebarNav() {
@@ -1368,7 +1393,7 @@ function tryNmapNextPage() {
     if (w) { w.style.display = 'block'; w.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
     return;
   }
-  S.nmap.currentDim++; renderNMAPPage(); window.scrollTo(0, 56);
+  S.nmap.currentDim++; renderNMAPPage(); window.scrollTo(0, 56); _saveSession('nmap');
 }
 
 function nmapPageNav(d) {

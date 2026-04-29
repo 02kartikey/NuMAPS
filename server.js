@@ -302,9 +302,16 @@ function drainQueue() {
 
 // ── Static-file cache (in-memory, workers hold small files) ──
 const _fileCache = new Map();
-function serveStatic(filePath, res) {
+function serveStatic(filePath, res, req) {
+  const isHtml = path.extname(filePath) === '.html';
   if (_fileCache.has(filePath)) {
     const { data, ct, etag } = _fileCache.get(filePath);
+    // Handle conditional GET — return 304 if client already has this version.
+    if (req && req.headers['if-none-match'] === etag) {
+      res.writeHead(304, { 'ETag': etag, 'Cache-Control': 'public, max-age=3600' });
+      res.end();
+      return;
+    }
     res.writeHead(200, { 'Content-Type': ct, 'ETag': etag, 'Cache-Control': 'public, max-age=3600' });
     res.end(data);
     return;
@@ -313,13 +320,19 @@ function serveStatic(filePath, res) {
     if (err) { res.writeHead(404); res.end(path.basename(filePath) + ' not found'); return; }
     const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8' };
     const ct   = MIME[path.extname(filePath)] || 'text/plain';
-    const etag = '"' + data.length + '-' + Date.now() + '"';
+    // Use content hash (length + mtime-stable seed) rather than Date.now() so
+    // ETags don't change on every worker restart — just on actual file changes.
+    const etag = '"' + data.length + '-' + require('crypto').createHash('md5').update(data).digest('hex').slice(0, 8) + '"';
     // Cache JS + CSS; never cache HTML so deploys take effect immediately
-    if (path.extname(filePath) !== '.html') _fileCache.set(filePath, { data, ct, etag });
-    res.writeHead(200, {
-      'Content-Type':  ct,
-      'Cache-Control': path.extname(filePath) === '.html' ? 'no-cache' : 'public, max-age=3600',
-    });
+    if (!isHtml) _fileCache.set(filePath, { data, ct, etag });
+    const cacheControl = isHtml ? 'no-cache' : 'public, max-age=3600';
+    // Handle conditional GET even on first serve (unlikely but correct).
+    if (!isHtml && req && req.headers['if-none-match'] === etag) {
+      res.writeHead(304, { 'ETag': etag, 'Cache-Control': cacheControl });
+      res.end();
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': ct, 'ETag': etag, 'Cache-Control': cacheControl });
     res.end(data);
   });
 }
@@ -592,10 +605,21 @@ const server = http.createServer((req, res) => {
     const urlPath  = req.url.split('?')[0];
     const ext      = path.extname(urlPath);
     const allowed  = ['.html', '.css', '.js'];
-    const filePath = allowed.includes(ext)
+    const candidate = allowed.includes(ext)
       ? path.join(__dirname, urlPath)
       : path.join(__dirname, 'index.html');
-    serveStatic(filePath, res);
+    // ── Path-traversal guard ──────────────────────────────────────────
+    // Resolve to an absolute path and confirm it is still inside __dirname.
+    // Without this, a request like /../../server.js would pass the
+    // extension check and expose arbitrary files on the host.
+    const resolved = path.resolve(candidate);
+    if (!resolved.startsWith(path.resolve(__dirname) + path.sep) &&
+        resolved !== path.resolve(__dirname)) {
+      res.writeHead(403);
+      res.end('Forbidden');
+      return;
+    }
+    serveStatic(resolved, res, req);
     return;
   }
 
